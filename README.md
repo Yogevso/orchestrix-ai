@@ -1,6 +1,6 @@
 # 🧠 Orchestrix AI
 
-**The analysis plane of the [Orchestrix Platform](#platform-architecture).** Consumes job lifecycle events from Engine and host metrics from Insights. Emits structured incident analysis, anomaly detection, prioritization, and real-time system health — displayed by Console.
+**The analysis plane of the [Orchestrix Platform](https://github.com/Yogevso/Orchestrix-Platform).** Consumes job lifecycle events from Engine and host metrics from Insights. Emits structured incident analysis, anomaly detection, prioritization, and real-time system health — displayed by Console.
 
 Production-style AI reasoning engine for analyzing distributed system incidents — not a chatbot, an automated debugging pipeline. Correlates signals across events, jobs, metrics, and alerts. Classifies incidents. Explains root causes with a reasoning trace. Falls back to deterministic rules when the LLM is unavailable.
 

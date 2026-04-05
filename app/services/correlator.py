@@ -28,6 +28,9 @@ def detect_correlations(
     correlations.extend(_cpu_job_failure_correlation(jobs, metrics))
     correlations.extend(_memory_oom_correlation(events, alerts))
     correlations.extend(_cascading_failure_correlation(events, jobs))
+    correlations.extend(_engine_worker_resource_correlation(events, alerts, metrics))
+    correlations.extend(_engine_queue_backlog_correlation(events, alerts))
+    correlations.extend(_engine_telemetry_resource_exhaustion(jobs, metrics, alerts))
 
     logger.info("Detected %d correlations", len(correlations))
     return correlations
@@ -96,6 +99,91 @@ def _cascading_failure_correlation(events: list[SystemEvent], jobs: list[Job]) -
             sources=list({e.source for e in restarts + critical_events}),
             pattern=f"Cascading failure pattern: {len(restarts)} restart(s), "
                     f"{len(critical_events)} critical event(s), {len(failed_jobs)} failed job(s)",
+            severity="critical",
+        ))
+    return results
+
+
+# ── Cross-platform correlation rules (Engine × system-insights) ──
+
+
+def _engine_worker_resource_correlation(
+    events: list[SystemEvent],
+    alerts: list[Alert],
+    metrics: list[Metric],
+) -> list[Correlation]:
+    """Detect worker offline/heartbeat miss correlated with resource pressure."""
+    results = []
+    worker_events = [e for e in events if "worker" in e.source.lower() and
+                     e.type in ("job.failed", "job.dead_lettered")]
+    worker_alerts = [a for a in alerts if "worker" in a.source.lower() and "offline" in a.message.lower()]
+    resource_alerts = [a for a in alerts if a.source.startswith("insights/")]
+    high_cpu = [m for m in metrics if m.source.startswith("insights/") and m.name == "cpu_usage" and m.value > 80]
+    high_mem = [m for m in metrics if m.source.startswith("insights/") and m.name == "memory_usage"]
+
+    if (worker_events or worker_alerts) and (resource_alerts or high_cpu or high_mem):
+        sources = (
+            [e.source for e in worker_events[:3]] +
+            [a.source for a in worker_alerts[:3]] +
+            [a.source for a in resource_alerts[:3]] +
+            [m.source for m in high_cpu[:3]]
+        )
+        results.append(Correlation(
+            sources=list(set(sources)),
+            pattern="Engine worker issues correlated with host resource pressure — "
+                    "workers may be failing due to CPU/memory exhaustion on the host",
+            severity="critical",
+        ))
+    return results
+
+
+def _engine_queue_backlog_correlation(
+    events: list[SystemEvent],
+    alerts: list[Alert],
+) -> list[Correlation]:
+    """Detect queue backlog combined with repeated job failures."""
+    results = []
+    backlog_alerts = [a for a in alerts if a.metric == "queue_backlog"]
+    dead_letter_alerts = [a for a in alerts if a.metric == "dead_letter_count"]
+    failure_events = [e for e in events if e.type in ("job.failed", "job.dead_lettered")]
+
+    if backlog_alerts and (dead_letter_alerts or len(failure_events) >= 3):
+        queue_names = [a.source.split("/")[-1] for a in backlog_alerts]
+        results.append(Correlation(
+            sources=list(set(
+                [a.source for a in backlog_alerts] +
+                [a.source for a in dead_letter_alerts] +
+                [e.source for e in failure_events[:5]]
+            )),
+            pattern=f"Queue backlog on {', '.join(queue_names)} with repeated failures — "
+                    "jobs are piling up and failing, possible systemic issue",
+            severity="critical",
+        ))
+    return results
+
+
+def _engine_telemetry_resource_exhaustion(
+    jobs: list[Job],
+    metrics: list[Metric],
+    alerts: list[Alert],
+) -> list[Correlation]:
+    """Detect Engine job failures coinciding with system-insights resource metrics."""
+    results = []
+    failed_jobs = [j for j in jobs if j.status in ("failed", "dead_letter")]
+    system_peak_cpu = [m for m in metrics if m.name == "system_peak_cpu" and m.value > 85]
+    active_alert_metrics = [m for m in metrics if m.name == "active_alerts" and m.value > 5]
+
+    if failed_jobs and (system_peak_cpu or active_alert_metrics):
+        sources = (
+            [f"engine/job/{j.id[:8]}" for j in failed_jobs[:3]] +
+            [m.source for m in system_peak_cpu] +
+            [m.source for m in active_alert_metrics]
+        )
+        cpu_val = system_peak_cpu[0].value if system_peak_cpu else 0
+        results.append(Correlation(
+            sources=list(set(sources)),
+            pattern=f"{len(failed_jobs)} Engine job failure(s) while system CPU peaked at "
+                    f"{cpu_val:.0f}% — resource contention likely contributing to failures",
             severity="critical",
         ))
     return results

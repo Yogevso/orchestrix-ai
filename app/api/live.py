@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
 
 from app.services.tools import get_recent_events, get_failed_jobs, get_alerts, get_high_cpu_processes
+from app.ingestion.engine_events import ingest_engine_events
 
 router = APIRouter(prefix="/ai", tags=["live"])
 logger = logging.getLogger(__name__)
@@ -22,6 +23,12 @@ async def _generate_stream(request: Request):
             jobs = await get_failed_jobs()
             alerts = await get_alerts()
             metrics = await get_high_cpu_processes()
+
+            # Merge Engine-sourced signals
+            engine_events, engine_jobs, engine_alerts = await ingest_engine_events()
+            events.extend(engine_events)
+            jobs.extend(engine_jobs)
+            alerts.extend(engine_alerts)
 
             critical_events = [e for e in events if e.severity == "critical"]
             critical_alerts = [a for a in alerts if a.severity == "critical"]

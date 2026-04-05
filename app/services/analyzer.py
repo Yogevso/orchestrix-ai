@@ -41,6 +41,8 @@ from app.services.tools import (
     get_high_cpu_processes,
     get_alerts,
 )
+from app.ingestion.engine_events import ingest_engine_events
+from app.ingestion.telemetry import ingest_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,17 @@ class AnalyzerService:
         jobs = await get_failed_jobs(time_range)
         metrics = await get_high_cpu_processes(time_range)
         alerts = await get_alerts(time_range)
+
+        # Merge in Engine-sourced data (job events, worker alerts, queue alerts)
+        engine_events, engine_jobs, engine_alerts = await ingest_engine_events()
+        events.extend(engine_events)
+        jobs.extend(engine_jobs)
+        alerts.extend(engine_alerts)
+
+        # Merge in system-insights telemetry (host metrics, system alerts)
+        telemetry_metrics, telemetry_alerts = await ingest_telemetry()
+        metrics.extend(telemetry_metrics)
+        alerts.extend(telemetry_alerts)
 
         result = await self._run_analysis(incident_id, events, jobs, metrics, alerts)
 

@@ -24,31 +24,39 @@ This is an **AI-powered debugging engine** for real systems.
 
 ---
 
-## 🔗 Integration with Orchestrix Ecosystem
+## 🔗 Part of the Orchestrix Platform
 
-Orchestrix AI is part of a full observability + AI system:
+Orchestrix AI is the **analysis plane** of the Orchestrix Platform — it ingests execution data and system telemetry, then produces structured incident analysis, anomaly detection, and root-cause explanations.
 
-| Project | Stack | Role |
-|---|---|---|
-| **[SysWatch](https://github.com/Yogevso/SysWatch)** | C | Collects system metrics (CPU, memory, processes) |
-| **[Packet Analyzer](https://github.com/Yogevso/Packet-Analyzer)** | C | Captures network traffic and detects anomalies |
-| **[Orchestrix Backend](https://github.com/Yogevso/orchestrix)** | FastAPI | Stores jobs, events, and alerts |
-| **Orchestrix AI** | FastAPI + OpenAI | Analyzes incidents using RAG + tool-based reasoning |
-| **[Orchestrix Console](https://github.com/Yogevso/orchestrix-console)** | React | Visualizes system state and AI insights |
+| Service | Role | Interaction |
+|---------|------|-------------|
+| **[Orchestrix Engine](https://github.com/Yogevso/Orchestrix-Engine)** | Execution plane | AI polls Engine events and job data to detect failure patterns and generate incident analysis |
+| **[Orchestrix Console](https://github.com/Yogevso/orchestrix-console)** | Operator UI | Console calls AI endpoints and displays root-cause analysis, reasoning traces, and recommendations |
+| **[System Insights API](https://github.com/Yogevso/system-insights-api)** | Telemetry backend | AI correlates host/service metrics with Engine execution failures (e.g. CPU spike → job failure) |
+| **[Identity Access Service](https://github.com/Yogevso/identity-access-service)** | Shared auth | AI validates JWT tokens for tenant-scoped access to privileged analysis endpoints |
+
+**Data AI consumes:**
+- Job lifecycle events and workflow failures from Engine (`GET /events`, `GET /jobs`)
+- Host metrics, process data, and alerts from System Insights API
+- Custom telemetry snapshots via replay mode
+
+**Data AI produces:**
+- Incident classification and root-cause analysis
+- Reasoning traces with quality scores (confidence, signal strength, data coverage)
+- Anomaly detection results (threshold + z-score)
+- Prioritized incident rankings
+- Real-time system health via SSE stream
 
 ### Data Flow
 
 ```
-SysWatch / Packet Analyzer
+Orchestrix Engine  →  job/workflow events
+System Insights API  →  host metrics, alerts
          ↓
-   Orchestrix Backend  ←  stores events, jobs, alerts
+    Orchestrix AI  →  correlate, classify, reason
          ↓
-    Orchestrix AI      ←  retrieves data, reasons, explains
-         ↓
-   Orchestrix Console  ←  visualizes insights
+   Orchestrix Console  →  display insights to operator
 ```
-
-This project demonstrates a **complete pipeline** from system data collection → backend storage → AI-powered reasoning → user interface.
 
 ---
 

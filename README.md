@@ -1,8 +1,8 @@
 # 🧠 Orchestrix AI
 
-**Production-style AI reasoning engine** for analyzing distributed system incidents — not a chatbot, an automated debugging pipeline.
+**The analysis plane of the [Orchestrix Platform](#platform-architecture).** Consumes job lifecycle events from Engine and host metrics from Insights. Emits structured incident analysis, anomaly detection, prioritization, and real-time system health — displayed by Console.
 
-Correlates signals across events, jobs, metrics, and alerts. Classifies incidents. Explains root causes with a reasoning trace. Falls back to deterministic rules when the LLM is unavailable.
+Production-style AI reasoning engine for analyzing distributed system incidents — not a chatbot, an automated debugging pipeline. Correlates signals across events, jobs, metrics, and alerts. Classifies incidents. Explains root causes with a reasoning trace. Falls back to deterministic rules when the LLM is unavailable.
 
 ---
 
@@ -56,6 +56,29 @@ System Insights API  →  host metrics, alerts
     Orchestrix AI  →  correlate, classify, reason
          ↓
    Orchestrix Console  →  display insights to operator
+```
+
+### Platform Architecture
+
+```mermaid
+flowchart TB
+    Console["Orchestrix Console\n:5173 — Operator UI"]
+    Engine["Orchestrix Engine\n:8000 — Execution Plane"]
+    AI["Orchestrix AI\n:8001 — Analysis Plane"]
+    Insights["System Insights API\n:8002 — Telemetry Backend"]
+    IAM["Identity Access Service\n:8003 — Auth & RBAC"]
+
+    Console -- "/api — jobs, workflows, workers" --> Engine
+    Console -- "/ai — incident analysis" --> AI
+    Console -- "/insights — host metrics" --> Insights
+    Console -- "/iam — login, tokens" --> IAM
+
+    AI -- "poll events & jobs" --> Engine
+    AI -- "correlate host metrics" --> Insights
+    Engine -. "validate JWT" .-> IAM
+    AI -. "validate JWT" .-> IAM
+
+    style AI fill:#f59e0b,color:#000,stroke:#f59e0b
 ```
 
 ---
